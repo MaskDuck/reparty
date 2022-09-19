@@ -13,12 +13,12 @@ class EventHandler:
         self._ws = ws
 
     def __getitem__(self, __key) -> Awaitable:
-
+        
         return getattr(self, "parse_" + __key.lower(), self.parse_unknown_event)
 
     async def parse_unknown_event(self, data):
         pass
-
+    
     async def parse_ready(self, data: ReadyEvent):
-        self._ws._resume_gateway_url = data["resume_gateway_url"]
-        self._ws._session_id = data["session_id"]
+        self._ws._resume_gateway_url = data['resume_gateway_url']
+        self._ws._session_id = data['session_id']

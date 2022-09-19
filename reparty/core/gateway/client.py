@@ -4,6 +4,8 @@ from aiohttp import ClientSession, WSMsgType
 
 from sys import platform as _os
 
+from logging import getLogger
+
 if TYPE_CHECKING:
     from typing import Optional
     from aiohttp import ClientWebSocketResponse
@@ -11,20 +13,16 @@ if TYPE_CHECKING:
     from ...typehint.gateway import UpdatePresenceData, GatewayEvent
     from .event_handler import EventHandler
 
-try:
-    from orjson import loads, dumps
-except ImportError:
-    from json import (  # noqa: F401 -- this is used in case we can't import orjson
-        loads,
-        dumps,
-    )  
+__all__ = "WSClient"
 
-
-from utils import zjson_from_msg
-from asyncio import sleep, ensure_future, TimeoutError
+from ...utils import zjson_from_msg
+from asyncio import sleep, create_task, TimeoutError, run as run_async
 
 from random import randint
 from ..errors.gateway import GatewayClosed
+from .event_handler import EventHandler
+
+_log = getLogger("reparty")
 
 
 class Opcodes:
@@ -80,28 +78,12 @@ class WSClient:
         }
 
     async def _ping(self) -> None:
-        if TYPE_CHECKING:
-            self._ws: ClientWebSocketResponse
-
         await self._ws.send_json({"op": Opcodes.heartbeat, "d": self._last_sequence})
-        try:
-            r = await self._ws.receive(timeout=2.0)
-            r = await zjson_from_msg(r)
-            if r["op"] == Opcodes.heartbeat_ack:
-                self._heartbeat_fail = 0
-            else:
-                self._heartbeat_fail += 1
-                if self._heartbeat_fail >= 5:
-                    await self._ws.close(code=4001)
-        except TimeoutError:
-            self._heartbeat_fail += 1
-            if self._heartbeat_fail >= 5:
-                await self._ws.close(code=4001)
 
     async def _keep_connection(self) -> None:
         while True:
             await self._ping()
-            await sleep(self._heartbeat_interval)
+            await sleep(self._heartbeat_interval / 1000)
 
     @property
     def identify_payload(self) -> None:
@@ -116,35 +98,43 @@ class WSClient:
         }
         if a := self._activities_payload:
             o["presence"] = a
+        return o
 
-    async def connect(self, resuming: bool = False) -> None:
+    async def _connect(self, resuming: bool = False) -> None:
         gw_url = self._resume_gateway_url if resuming else self._gw_url
         if self._session is None:
             self._session = ClientSession()
         async with self._session.ws_connect(gw_url) as ws:
             self._ws = ws
             async for msg in self._ws:
+
                 payload: GatewayEvent = zjson_from_msg(msg)
                 self._last_sequence = payload["s"]
                 if payload["op"] == Opcodes.hello:
                     self._heartbeat_interval = payload["d"]["heartbeat_interval"]
+                    create_task(self._keep_connection())
 
-                    jitter = randint(0, 1)
-                    await sleep(float(jitter))
-                    await ensure_future(self._keep_connection())
                     if resuming:
                         await self._ws.send_json(self.resume_payload)
                     else:
-                        await self._ws.send_json({}, dumps=dumps)
+                        await self._ws.send_json(self.identify_payload)
+                    jitter = randint(0, 1)
+                    await sleep(float(jitter))
                 elif payload["op"] == Opcodes.heartbeat:
                     await self._ping()
                 elif payload["op"] == Opcodes.dispatch:
                     await self._dispatcher[payload["t"]](payload["d"])
                 elif payload["op"] == Opcodes.reconnect:
                     await self._ws.close(code=4001)
-                    await self.connect(resuming=True)
+                    await self._connect(resuming=True)
                 elif payload["op"] == Opcodes.invalid_session:
                     await self._ws.close(code=4001)
-                    await self.connect()
+                    await self._connect()
                 elif msg.type == WSMsgType.CLOSE:
                     raise GatewayClosed(msg.data, msg.extra)
+
+    def connect(self, resuming=False) -> None:
+        try:
+            run_async(self._connect(resuming=resuming))
+        except KeyboardInterrupt:
+            run_async(self._session.close())

@@ -2,11 +2,8 @@ from __future__ import annotations
 from aiohttp import ClientResponse, WSMessage
 import zlib
 
+from json import loads
 
-try:
-    from orjson import loads
-except ImportError:
-    from json import loads
 _decompresser = zlib.decompressobj()
 _zlib_suffix: bytes = b"\x00\x00\xff\xff"
 _buffer = bytearray()
@@ -22,7 +19,3 @@ def zjson_from_msg(resp: WSMessage):
         o = _decompresser.decompress(_buffer)
         _buffer = bytearray()
         return loads(o)
-
-
-async def json_from_resp(resp: ClientResponse):
-    return await resp.json(loads=loads)
