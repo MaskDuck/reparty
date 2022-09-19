@@ -8,4 +8,4 @@ try:
 except ImportError:
     pass
 
-getLogger('reparty').addHandler(NullHandler())
+getLogger("reparty").addHandler(NullHandler())
