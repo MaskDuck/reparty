@@ -54,10 +54,11 @@ class WSClient:
         token: str,
         intents: int,
         activities: Optional[UpdatePresenceData] = None,
-        dispatcher: EventHandler = None,
+        dispatcher: Optional[EventHandler] = None,
+        session: Optional[ClientSession] = None, # for existing session
     ):
         self._token: str = token
-        self._session: Optional[ClientSession] = None
+        self._session: Optional[ClientSession] = session
         self._api_version: int = 10
         self._gw_url: str = f"wss://gateway.discord.gg/?v={self._api_version}&encoding=json&compress=zlib-stream"
         self._intents: int = intents
@@ -123,7 +124,8 @@ class WSClient:
                 elif payload["op"] == Opcodes.heartbeat:
                     await self._ping()
                 elif payload["op"] == Opcodes.dispatch:
-                    await self._dispatcher[payload["t"]](payload["d"])
+                    for x in self._dispatcher[payload["t"]]:  # type: ignore
+                        await x(payload["d"])  # type: ignore
                 elif payload["op"] == Opcodes.reconnect:
                     await self._ws.close(code=4001)
                     await self._connect(resuming=True)

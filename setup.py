@@ -9,12 +9,13 @@ classifiers = [
 ]
 packages = [
     "reparty",
+    "reparty.core"
 ]
 setup(
     name="reparty",
     version="0.0.1",
     description="The simple, elegant and modern way to make Discord bots",  # noqa: E501
-    long_description=open("README.md").read(),
+    long_description="# hello world",
     url="",
     author="MaskDuck",
     license="MIT",
