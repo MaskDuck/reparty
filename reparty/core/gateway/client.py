@@ -53,6 +53,7 @@ class WSClient:
         *,
         token: str,
         intents: int,
+        bot = None,  # in exceptional circumstances, bot can be None
         activities: Optional[UpdatePresenceData] = None,
         dispatcher: Optional[EventHandler] = None,
         session: Optional[ClientSession] = None, # for existing session
@@ -66,6 +67,7 @@ class WSClient:
         self._activities_payload = activities
         self._dispatcher = dispatcher if dispatcher else EventHandler(self)
         self._heartbeat_fail: int = 0
+        self.bot = bot
 
     @property
     def resume_payload(self):
@@ -124,6 +126,7 @@ class WSClient:
                 elif payload["op"] == Opcodes.heartbeat:
                     await self._ping()
                 elif payload["op"] == Opcodes.dispatch:
+                    # print(f"Event {payload['t']}")
                     logger.debug(f"Event {payload['t']}")
                     for x in self._dispatcher[payload["t"]]:  # type: ignore
                         await x(payload["d"])  # type: ignore
@@ -141,3 +144,6 @@ class WSClient:
             run_async(self._connect(resuming=resuming))
         except KeyboardInterrupt:
             run_async(self._session.close())
+
+    def register_client(self, bot):
+        self.bot = bot

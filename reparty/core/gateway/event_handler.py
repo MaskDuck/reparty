@@ -33,6 +33,10 @@ class EventHandler:
     async def parse_guild_create(self, data: GuildCreateData):
         logger.debug(f"Caching guild {data['id']}")
         self._ws.bot.cacher.add_guild_to_cache(data)
+        self._ws.bot.cacher.create_empty_guild_member_slot(data['id'])
+        for x in data['members']:
+            x['guild_id'] = data['id']
+            self._ws.bot.cacher.add_member_to_cache(x)
 
     async def parse_guild_member_add(self, data: GuildMemberAddData) -> None:
         logger.debug(f"Caching member {data['id']} of guild {data['guild_id']} to cache")

@@ -25,5 +25,7 @@ class Cacher:
         self._guild_members[guild_id].append(member)
 
     def get_member_from_cache(self, guild_id: str, member_id: str) -> GuildMemberData:
-        x = lambda k: k["id"] == member_id
-        return filter(x, self._guild_members[guild_id])  # type: ignore
+        return [x for x in self._guild_members[guild_id] if x['user']['id'] == member_id][0]
+
+    def create_empty_guild_member_slot(self, guild_id: str) -> None:
+        self._guild_members[guild_id] = []
