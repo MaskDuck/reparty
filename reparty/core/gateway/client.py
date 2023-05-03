@@ -22,7 +22,7 @@ from random import randint
 from ..errors.gateway import GatewayClosed
 from .event_handler import EventHandler
 
-_log = getLogger("reparty")
+logger = getLogger("reparty")
 
 
 class Opcodes:
@@ -124,6 +124,7 @@ class WSClient:
                 elif payload["op"] == Opcodes.heartbeat:
                     await self._ping()
                 elif payload["op"] == Opcodes.dispatch:
+                    logger.debug(f"Event {payload['t']}")
                     for x in self._dispatcher[payload["t"]]:  # type: ignore
                         await x(payload["d"])  # type: ignore
                 elif payload["op"] == Opcodes.reconnect:
