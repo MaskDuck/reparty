@@ -136,6 +136,17 @@ class Client:
         x = await self._http_client.request(r)
         return x.json
 
+    async def pin_message(self,
+                  channel_id: SnowflakeType,
+                  message_id: SnowflakeType,
+                ) -> None:
+        r = RequestInformation(
+                route=f"/channels/{channel_id}/pins/{message_id}",
+                method="PUT",
+        )
+        await self._http_client.request(r)
+
+
     # def send_message(
     #    self,
     #   content: Any

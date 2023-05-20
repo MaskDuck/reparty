@@ -149,3 +149,6 @@ class Message(Snowflake):
     async def delete(self):
         await self._bot.delete_message(self.channel_id, self.id)
 
+    async def pin(self):
+        await self._bot.pin_message(self.channel_id, self.id)
+
