@@ -1,24 +1,30 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
-from aiohttp import ClientSession, WSMsgType
-
-from sys import platform as _os
 
 from logging import getLogger
+from sys import platform as _os
+from typing import TYPE_CHECKING
+
+from aiohttp import ClientSession, WSMsgType
 
 if TYPE_CHECKING:
-    from typing import Optional
+    from typing import Optional, List, Literal
+
     from aiohttp import ClientWebSocketResponse
 
-    from ...typehint.gateway import UpdatePresenceData, GatewayEvent
+    # from ...typehint.gateway import GatewayEvent, UpdatePresenceData
     from .event_handler import EventHandler
+
+from discord_typings import (ActivityData, GatewayEvent, GuildMemberData,
+                             Snowflake, UpdatePresenceData)
 
 __all__ = "WSClient"
 
-from ...utils import zjson_from_msg
-from asyncio import sleep, create_task, TimeoutError, run as run_async
-
+from asyncio import TimeoutError, create_task
+from asyncio import run as run_async
+from asyncio import sleep
 from random import randint
+
+from ...utils import zjson_from_msg
 from ..errors.gateway import GatewayClosed
 from .event_handler import EventHandler
 
@@ -53,10 +59,10 @@ class WSClient:
         *,
         token: str,
         intents: int,
-        bot = None,  # in exceptional circumstances, bot can be None
+        bot,  # in exceptional circumstances, bot can be None
         activities: Optional[UpdatePresenceData] = None,
         dispatcher: Optional[EventHandler] = None,
-        session: Optional[ClientSession] = None, # for existing session
+        session: Optional[ClientSession] = None,  # for existing session
     ):
         self._token: str = token
         self._session: Optional[ClientSession] = session
@@ -67,7 +73,49 @@ class WSClient:
         self._activities_payload = activities
         self._dispatcher = dispatcher if dispatcher else EventHandler(self)
         self._heartbeat_fail: int = 0
+        self._resuming_gateway_url: Optional[str] = None
         self.bot = bot
+
+    async def change_presence(
+        self,
+        since: Optional[int] = None,
+        activities: Optional[List[ActivityData]] = None,
+        status: Literal["dnd", "streaming", "online", "idle", "invisible"] = None,
+        afk: Optional[bool] = None,
+    ):
+        payload = {}
+        if since:
+            payload["since"] = since
+        if activities:
+            payload["activities"] = activities
+        if status:
+            payload["status"] = status
+        if afk:
+            payload["afk"] = afk
+
+        await self._ws.send_json(payload)
+
+    async def request_guild_members(
+        self,
+        *,
+        guild_id: Snowflake,
+        query: str = "",
+        limit: int = 0,
+        presences: bool = False,
+        user_ids: List[Snowflake] = [],
+        nonce: Optional[str] = None,
+    ) -> None:
+        payload = {
+            "guild_id": str(guild_id),
+            "query": query,
+            "limit": limit,
+            "presences": presences,
+            "user_ids": user_ids,
+        }
+        if nonce:
+            payload["nonce"] = nonce
+
+        await self._ws.send_json(payload)
 
     @property
     def resume_payload(self):
@@ -110,8 +158,9 @@ class WSClient:
         async with self._session.ws_connect(gw_url) as ws:
             self._ws = ws
             async for msg in self._ws:
-
+                logger.debug(f"New data from WS")
                 payload: GatewayEvent = zjson_from_msg(msg)
+                logger.debug(payload)
                 self._last_sequence = payload["s"]
                 if payload["op"] == Opcodes.hello:
                     self._heartbeat_interval = payload["d"]["heartbeat_interval"]
@@ -135,7 +184,12 @@ class WSClient:
                     await self._connect(resuming=True)
                 elif payload["op"] == Opcodes.invalid_session:
                     await self._ws.close(code=4001)
-                    await self._connect()
+                    if payload["d"]:
+                        await self._connect(resuming=True)
+                    else:
+                        await self._connect()
+
+                    # TODO: probably handle these in order to prevent improperly informed disconnections
                 elif msg.type == WSMsgType.CLOSE:
                     raise GatewayClosed(msg.data, msg.extra)
 
@@ -144,6 +198,3 @@ class WSClient:
             run_async(self._connect(resuming=resuming))
         except KeyboardInterrupt:
             run_async(self._session.close())
-
-    def register_client(self, bot):
-        self.bot = bot

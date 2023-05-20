@@ -9,6 +9,7 @@ from aiohttp import ClientResponse, ClientSession
 
 from .ratelimiter import Ratelimiter, RatelimitBucket
 
+from datetime import datetime
 logger = getLogger("reparty")
 
 if TYPE_CHECKING:
@@ -29,14 +30,19 @@ class RequestInformation:
         headers: Dict[str, Any] = {},
         json: Optional[Dict[str, Any]] = {},
         reason: Optional[str] = None,
+        rather_than_discord: bool = False
     ):
         self.headers = headers
         self.json = json
         if reason:
             self.headers["X-Audit-Log-Reason"] = reason
-        self.route = "https://discord.com/api/v10" + route
+        if rather_than_discord:
+            self.route = route
+        else:
+            self.route = "https://discord.com/api/v10" + route
         self.bare_route = route
         self.method = method
+        
 
 
 
@@ -71,10 +77,16 @@ class Requestor:
     async def request(self, r: RequestInformation):
         # async with request(r.)
         if self._ratelimiter.is_globally_ratelimited:
+
             await sleep(
                 self._ratelimiter.is_still_globally_being_ratelimited_for.seconds
             )
-            return await self.request(r)
+            # return await self.request(r)
+        if bucket := self._ratelimiter._bucket_ratelimits.get(T(r.route)):  # type: ignore
+            bucket: RatelimitBucket
+            if bucket.remaining == 0:
+                x = bucket.reset - datetime.now()
+                await sleep(x.seconds)
         if self._session is None:
             self._session = ClientSession()
         r.headers["Authorization"] = f"Bot {self._token}"
@@ -98,8 +110,11 @@ class Requestor:
             if i.status == 429:
                 logger.debug("Congrats! You got ratelimited!\n" f"Endpoint: {r.route}")
                 j = await i.json()
-                if h.get("x-ratelimit-global"):
+                if h.get("x-ratelimit-global"):  # this will cover both False and None
                     self._ratelimiter.toggle_global_ratelimit(h['x-ratelimit-reset'])
+
                 return ResponseInformation(headers=h, json=j, status_code=i.status, ok=False)
+            ok = 200 < i.status < 300
+            return ResponseInformation(headers=h, json=None, status_code=i.status, ok=ok)
 
                 # TODO: implement ratelimit
