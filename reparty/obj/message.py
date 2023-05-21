@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union, Literal
 
 from reparty.core.http.request import RequestInformation
 from reparty.obj.snowflake import Snowflake
+
 
 if TYPE_CHECKING:
     from discord_typings import (ActivityData, AttachmentData,
@@ -16,8 +17,10 @@ if TYPE_CHECKING:
     from discord_typings import Snowflake as SnowflakeType
     from discord_typings import (StickerItemData, ThreadChannelData, UserData,
                                  UserMentionData)
+    from discord_typings import ChannelData
 
     from .client import Client
+    from ..typehint import Empty, Undefined 
 
 
 class Message(Snowflake):
@@ -151,4 +154,21 @@ class Message(Snowflake):
 
     async def pin(self):
         await self._bot.pin_message(self.channel_id, self.id)
+
+    async def start_thread(
+            self,
+            *,
+            name: str,
+            auto_archive_duration: Optional[Literal[60, 1440, 4320, 10080]] | Undefined =Empty,
+            rate_limit_per_user: Optional[int] | Undefined = Empty
+        ) -> Optional[ChannelData]:
+        return await self._bot.start_thread_from_message(
+                self.channel_id,
+                self.id,
+                auto_archive_duration=auto_archive_duration,
+                rate_limit_per_user=rate_limit_per_user
+            )
+
+    
+         
 

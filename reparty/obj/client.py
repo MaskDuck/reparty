@@ -4,7 +4,7 @@ from traceback import format_exception, print_exception
 from typing import (Any, AnyStr, Awaitable, Generic, List, Optional, TypeVar,
                     Union)
 
-from discord_typings import Snowflake as SnowflakeType
+from discord_typings import Snowflake as SnowflakeType, ChannelData
 from reparty.core.gateway.client import WSClient
 from reparty.core.http.request import RequestInformation, Requestor
 from reparty.obj.message import Message
@@ -127,14 +127,15 @@ class Client:
         channel_id: SnowflakeType,
         message_id: SnowflakeType,
         **kwargs,
-    ) -> Optional[dict]:
+    ) -> Optional[Message]:
         r = RequestInformation(
             route=f"/channels/{channel_id}/messages/{message_id}",
             method="PATCH",
             json=kwargs,
         )
         x = await self._http_client.request(r)
-        return x.json
+        if x.ok:
+            return Message(bot=self, data=x.json)
 
     async def pin_message(self,
                   channel_id: SnowflakeType,
@@ -145,6 +146,23 @@ class Client:
                 method="PUT",
         )
         await self._http_client.request(r)
+
+    async def start_thread_from_message(
+            self,
+            channel_id: SnowflakeType,
+            message_id: SnowflakeType,
+            reason: Optional[str] = None,
+            **kwargs,
+            ) -> Optional[ChannelData]:  # TODO: Channel Object typehint
+        r = RequestInformation(
+                route=f"/channels/{channel_id}/messages/{message_id}/threads",
+                method="POST",
+                json=kwargs
+            )
+        x = await self._http_client.request(r)
+        if x.ok:
+            return x.json
+        
 
 
     # def send_message(

@@ -24,4 +24,4 @@ class _EmptyField:
 
 Empty = _EmptyField()
 
-Undefined = Type[_EmptyField]
+Undefined = _EmptyField
